@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reconhecimento de Farda - Colégio Militar Dom Pedro II</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 3.5rem; /* Título bem grande */
+      color: red; /* Nome do colégio em vermelho */
+      margin-bottom: 10px;
+    }
+    #subtitle {
+      font-size: 1.5rem;
+      color: #333;
+      margin-bottom: 20px;
+    }
+    canvas {
+      border: 4px solid #333;
+      border-radius: 10px;
+      margin-top: 10px;
+      width: 800px !important; /* Quadro maior */
+      height: 600px !important; /* Quadro maior */
+    }
+    #status {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-top: 15px;
+    }
+    select {
+      padding: 5px;
+      font-size: 1rem;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Colégio Militar Dom Pedro II</h1>
+  <div id="subtitle">IA Identificadora dos Elementos da Farda</div>
+  <p id="status">Carregando modelo...</p>
+  <label for="cameraSelect">Escolha a câmera:</label>
+  <select id="cameraSelect"></select>
+
+  <!-- Bibliotecas -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+
+  <!-- JavaScript Integrado -->
+  <script>
+    let modelURL = "modelo/"; // Caminho direto da pasta raiz
+    let model, webcam, label = "Carregando...";
+    let cameraSelect;
+
+    async function preload() {
+      try {
+        let tmImageLib = window.tmImage;
+        if (!tmImageLib) {
+          const tmModule = await import('https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js');
+          tmImageLib = tmModule.default || tmModule.tmImage;
+        }
+        if (!tmImageLib || !tmImageLib.load) {
+          throw new Error("Biblioteca tmImage não carregada corretamente. Verifique a conexão.");
+        }
+        model = await tmImageLib.load(modelURL + "model.json", modelURL + "metadata.json"); // Nomes renomeados
+        console.log("Modelo carregado com sucesso");
+        document.getElementById("status").textContent = "Modelo carregado!";
+      } catch (error) {
+        console.error("Erro ao carregar modelo:", error);
+        document.getElementById("status").textContent = "Erro ao carregar modelo. Veja console.";
+      }
+    }
+
+    async function setup() {
+      createCanvas(800, 600); // Quadro maior
+      cameraSelect = document.getElementById("cameraSelect");
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(device => device.kind === "videoinput");
+
+      cameras.forEach((camera, index) => {
+        const option = document.createElement("option");
+        option.value = camera.deviceId;
+        option.text = camera.label || `Câmera ${index + 1}`;
+        cameraSelect.appendChild(option);
+      });
+
+      cameraSelect.addEventListener("change", () => iniciarCamera(cameraSelect.value));
+
+      if (cameras.length > 0) {
+        iniciarCamera(cameras[0].deviceId);
+      }
+    }
+
+    function iniciarCamera(deviceId) {
+      if (webcam) {
+        webcam.remove();
+      }
+      webcam = createCapture({
+        video: { deviceId: deviceId }
+      });
+      webcam.size(800, 600); // Ajustado para o quadro maior
+      webcam.hide();
+
+      if (model) {
+        setInterval(predict, 500);
+      }
+    }
+
+    function draw() {
+      background(0);
+      if (webcam) {
+        image(webcam, 0, 0, 800, 600); // Preenche o quadro maior
+      }
+      // Removido o texto da classe dentro do canvas
+    }
+
+    async function predict() {
+      if (!webcam || !model) return;
+      const prediction = await model.predict(webcam.elt);
+      prediction.sort((a, b) => b.probability - a.probability);
+      label = prediction[0].className; // Apenas o nome da classe
+      document.getElementById("status").textContent = label;
+    }
+  </script>
+</body>
+</html>
